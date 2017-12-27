@@ -38,11 +38,30 @@ void residual(const vector<Vertex>& G, vector<Vertex>& Gf) {
             - Forward edge with value = (free capacity)
         - Those edges with positive flow:
             - Backward edge with value = (flow)
+     */
 
-        For convention, will be using field "flow"
-        denoting a positive or a negative variation in the flow. */
-
-    // TODO
+    for (int vf = 0; vf < Gf.size(); vf++)
+        Gf[vf].adj.clear();
+    for (Vertex v : G) {
+        for (Edge e : v.adj) {
+            if (e.capacity - e.flow > 0) {  // forward edges
+                Edge ef;
+                ef.flow = 0;
+                ef.capacity = e.capacity - e.flow;
+                ef.prev = e.prev;
+                ef.next = e.next;
+                Gf[ef.prev].adj.insert(ef);
+            }
+            if (e.flow > 0) {               // backward edges
+                Edge nef;
+                nef.flow = 0;
+                nef.capacity = e.flow;
+                nef.prev = e.next;
+                nef.next = e.prev;
+                Gf[nef.prev].adj.insert(nef);
+            }
+        }
+    }
 }
 
 int main() {
@@ -93,6 +112,19 @@ int main() {
             G[i].adj.insert(e);  // G[i] --> t (destination)
         }
     }
+
+    // Residual network
+    vector<Vertex> Gf = G;
+    residual(G, Gf);
+
+    cout << endl <<  "Test residual:" << endl << endl;
+
+    for (Vertex v : Gf) {
+        for (Edge e : v.adj) {
+            cout << '[' << v.airport << " (" << v.time << ")] --(" << e.flow << "/" << e.capacity << ")-> [" << G[e.next].airport << "(" << G[e.next].time << ")]" << endl;
+        }
+    }
+    cout << endl << endl;
 
     /*
     cout << endl <<  "Test:" << endl << endl;
