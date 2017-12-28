@@ -1,6 +1,8 @@
 #include <iostream>
 #include <vector>
 #include <set>
+#include <queue>
+
 using namespace std;
 
 
@@ -9,6 +11,8 @@ struct Edge {
     int capacity;
     int prev;
     int next;
+    int lwb;
+    bool back;
 };
 
 bool operator<(const Edge& e1, const Edge& e2) {
@@ -19,6 +23,7 @@ bool operator<(const Edge& e1, const Edge& e2) {
 struct Vertex {
     int airport;
     int time;
+    int demand;
     set<Edge> adj;
 };
 
@@ -29,6 +34,18 @@ struct Vertex {
         - Augment algorithm
         - Edmonds-Karp algorithm
         - Check how to manage lower bounds properly
+
+        Must add "demand" attribute to a Vertex
+        Must add "lower bound" attribute to an Edge
+                 "is backward?" attribute to an Edge
+
+        Source: demand -k; sink: demand k
+        (where k is the number of pilots)
+        All other nodes should have a demand of 0
+        (when managing lower bounds, demand will be affected)
+        (new edge capacity will be edge.capacity - edge.lowerbound)
+        (lo q no se es com farem llavors per trobar una augmenting path
+            amb arestes ja saturades inicialment)
 */
 
 void residual(const vector<Vertex>& G, vector<Vertex>& Gf) {
@@ -50,6 +67,8 @@ void residual(const vector<Vertex>& G, vector<Vertex>& Gf) {
                 ef.capacity = e.capacity - e.flow;
                 ef.prev = e.prev;
                 ef.next = e.next;
+                ef.lwb = 0;
+                ef.back = false;
                 Gf[ef.prev].adj.insert(ef);
             }
             if (e.flow > 0) {               // backward edges
@@ -58,11 +77,103 @@ void residual(const vector<Vertex>& G, vector<Vertex>& Gf) {
                 nef.capacity = e.flow;
                 nef.prev = e.next;
                 nef.next = e.prev;
+                nef.lwb = 0;
+                nef.back = true;
                 Gf[nef.prev].adj.insert(nef);
             }
         }
     }
 }
+
+int bottleneck(const vector<Edge>& path) {
+    int min = path[0].capacity;
+    for (Edge e : path) {
+        if (e.capacity < min) min = e.capacity;
+    }
+    return min;
+}
+
+int augment(const vector<Edge>& path, vector<Vertex>& G) {
+    int b = bottleneck(path);
+    for (Edge e : path) {
+        // e is forward edge in G
+        if (!e.back) {
+            for (Edge augEdge : G[e.prev].adj) {
+                if (augEdge.next == e.next) {
+                    G[e.prev].adj.erase(augEdge);
+                    augEdge.flow += b;
+                    G[e.prev].adj.insert(augEdge);
+
+                    break;
+                }
+            }
+        }
+        // e is backward edge in G
+        else {
+            for (Edge augEdge : G[e.next].adj) {
+                if (augEdge.next == e.prev) {
+                    G[e.next].adj.erase(augEdge);
+                    augEdge.flow -= b;
+                    G[e.next].adj.insert(augEdge);
+                    break;
+                }
+            }
+        }
+    }
+    return b;
+}
+
+vector<Edge> BFS(const vector<Vertex>& G) {
+    queue<Vertex> Q;
+    vector<bool> visited(G.size(), false);
+    vector<Edge> parent(G.size());
+
+    Q.push(G[G.size() - 2]);    // push source vertex
+    visited[G.size() - 2] = true;
+
+    Vertex w;
+    while (not Q.empty()) {
+        w = Q.front();
+        Q.pop();
+        if (w.airport == -2) {  // sink (t)
+            break;
+        }
+
+        for (Edge e : w.adj) {
+            if (!visited[e.next]) {
+                visited[e.next] = true;
+                Q.push(G[e.next]);
+                parent[e.next] = e;
+            }
+        }
+    }
+    Edge p = parent[G.size() - 1];
+    vector<Edge> ret;
+    if (p.next != G.size() - 1) return ret;
+    while (p.prev != G.size() - 2) {
+        ret.push_back(p);
+        p = parent[p.prev];
+    }
+    ret.push_back(p);
+    reverse(ret.begin(), ret.end());
+    return ret;
+}
+
+void edmondsKarp(vector<Vertex> G) {    // TODO: pass by reference, by value only to help debugging
+    vector<Vertex> Gf = G;
+    residual(G, Gf);
+    int flow = 0;
+
+    vector<Edge> augPath = BFS(Gf);
+    while (augPath.size() > 0) {
+        flow += augment(augPath, G);
+        residual(G, Gf);
+        augPath = BFS(Gf);
+    }
+
+    cout << flow << endl;
+}
+
 
 int main() {
     int o, d, to, td;
@@ -72,13 +183,13 @@ int main() {
     */
     vector<vector<int>> landings(2);
     while (cin >> o >> d >> to >> td) {
-        Vertex source = {o, to};
-        Vertex dest = {d, td};
+        Vertex source = {o, to, 0};
+        Vertex dest = {d, td, 0};
         G.push_back(source);
         G.push_back(dest);
         // edge from source to dest
         int sz = G.size();
-        Edge e = {1, 1, sz-2, sz-1};
+        Edge e = {0, 1, sz-2, sz-1, 0, false};
         G[sz - 2].adj.insert(e);
         // store dest vertex in the "landings" array
         if (landings.size() < max(o, d) + 1) landings.resize(max(o, d) + 1);
@@ -89,7 +200,7 @@ int main() {
     for (int i = 0; i < G.size(); i += 2) {
         for (int j : landings[G[i].airport]) {
             if (G[i].time - G[j].time >= 15) {
-                Edge e = {0, 1, j, i};
+                Edge e = {0, 1, j, i, 0, false};
                 G[j].adj.insert(e);
             }
         }
@@ -97,26 +208,27 @@ int main() {
 
 
     // Source and sink
-    Vertex s {-1, -1};
-    Vertex t {-2, -2};
+    Vertex s {-1, -1, -2};  // negative demand means "want to send x units"
+    Vertex t {-2, -2, 2};
     G.push_back(s);
     G.push_back(t);
     int sz = G.size();
     for (int i = 0; i < sz - 2; i++) {
         if (i%2 == 0) {
-            Edge e = {0, 1, sz-2, i};
+            Edge e = {0, 1, sz-2, i, 0, false};
             G[sz - 2].adj.insert(e);  // s --> G[i] (origin)
         }
         else {
-            Edge e = {0, 1, i, sz-1};
+            Edge e = {0, 1, i, sz-1, 0, false};
             G[i].adj.insert(e);  // G[i] --> t (destination)
         }
     }
 
-    // Residual network
-    vector<Vertex> Gf = G;
-    residual(G, Gf);
 
+    edmondsKarp(G);
+
+
+    /*
     cout << endl <<  "Test residual:" << endl << endl;
 
     for (Vertex v : Gf) {
@@ -125,7 +237,7 @@ int main() {
         }
     }
     cout << endl << endl;
-
+    */
     /*
     cout << endl <<  "Test:" << endl << endl;
 
