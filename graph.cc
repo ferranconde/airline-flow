@@ -315,8 +315,8 @@ int main() {
     }
 
     // add extra edge between source and sink to derive excess of flow
-    Edge extra = {0, maxPilots, sz-2, sz-1, 0, false};
-    G[sz-2].adj.insert(extra);
+    // Edge extra = {0, maxPilots, sz-2, sz-1, 0, false};
+    // G[sz-2].adj.insert(extra);
 
 
     // reduce "circulation with demands" to "maximum flow"
