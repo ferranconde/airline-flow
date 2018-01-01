@@ -20,12 +20,23 @@ bool operator<(const Edge& e1, const Edge& e2) {
     return e1.prev < e2.prev;
 }
 
+bool operator==(const Edge& e1, const Edge& e2) {
+    return (e1.prev == e2.prev && e1.next == e2.next
+            && e1.flow == e2.flow && e1.capacity == e2.capacity
+            && e1.lwb == e2.lwb && e1.back == e2.back);
+}
+
+bool operator!=(const Edge& e1, const Edge& e2) {
+    return (!(e1 == e2));
+}
+
 struct Vertex {
     int airport;
     int time;
     int demand;
     set<Edge> adj;
 };
+
 
 /*
     TODO:
@@ -122,7 +133,7 @@ int augment(const vector<Edge>& path, vector<Vertex>& G) {
     return b;
 }
 
-vector<Edge> BFS(const vector<Vertex> G) {      // TODO: pass by ref
+vector<Edge> BFS(const vector<Vertex>& G) {      // TODO: pass by ref
     queue<Vertex> Q;
     vector<bool> visited(G.size(), false);
     vector<Edge> parent(G.size());
@@ -159,7 +170,7 @@ vector<Edge> BFS(const vector<Vertex> G) {      // TODO: pass by ref
     return ret;
 }
 
-void edmondsKarp(vector<Vertex> G) {    // TODO: pass by reference, by value only to help debugging
+int edmondsKarp(vector<Vertex>& G) {    // TODO: pass by reference, by value only to help debugging
     vector<Vertex> Gf = G;
     residual(G, Gf);
     int flow = 0;
@@ -171,7 +182,78 @@ void edmondsKarp(vector<Vertex> G) {    // TODO: pass by reference, by value onl
         augPath = BFS(Gf);
     }
 
-    cout << flow << endl;
+    return flow;
+}
+
+int countStarts(const vector<Vertex>& G) {
+    int count = 0;
+    int sz = G.size();
+    for (Edge e : G[sz - 4].adj) {
+        if (e.flow > 0 and e.next != sz-3) count++;
+    }
+    return count;
+}
+
+
+void updateK(vector<Vertex>& G, int k) {
+    // update demands on: source, sink
+    // update capacities on: edge ss - s, edge t - tt
+
+    int sz = G.size();
+    Edge fromSStoS = {0, -(G[sz - 4].demand), sz-2, sz-4, 0, false};
+    Edge fromTtoTT = {0, G[sz - 3].demand, sz-3, sz-1, 0, false};
+
+    Edge newSSS = fromSStoS;
+    newSSS.capacity = k;
+    Edge newTTT = fromTtoTT;
+    newTTT.capacity = k;
+
+    G[sz-4].demand = -k;
+    G[sz-3].demand = k;
+
+    G[sz-2].adj.erase(fromSStoS);
+    G[sz-2].adj.insert(newSSS);
+
+    G[sz-3].adj.erase(fromTtoTT);
+    G[sz-3].adj.insert(newTTT);
+}
+
+
+void printPaths(const vector<Vertex>& G) {
+    int sz = G.size();
+    for (Edge startEdge : G[sz-4].adj) {
+        if (startEdge.flow > 0) {
+            // This is a start edge
+            Vertex u = G[startEdge.next];
+
+            while (u.airport != -2) {
+                for (Edge e : u.adj) {      // TODO: better with "find"?
+                    if (e.next == e.prev + 1) {
+                        // this is a flight edge
+                        if (e != startEdge) cout << ' ';
+                        cout << (e.next/2) + 1;
+
+                        // navigate to next flight, if possible
+                        bool foundLink = false;
+                        for (Edge link : G[e.next].adj) {
+                            if (link.next != sz-3 and link.flow > 0) {
+                                // this is a link between two flights
+                                u = G[link.next];
+                                foundLink = true;
+                                break;
+                            }
+                        }
+
+                        if (!foundLink) u = G[sz-3];    // flight path ends here
+                        break;
+                    }
+                }
+            }
+
+            cout << endl;
+
+        }
+    }
 }
 
 
@@ -216,8 +298,8 @@ int main() {
     int maxPilots = G.size()/2;
 
     // Source and sink
-    Vertex s {-1, -1, -2};  // negative demand means "want to send x units"
-    Vertex t {-2, -2, 2};
+    Vertex s {-1, -1, -maxPilots};  // negative demand means "want to send x units"
+    Vertex t {-2, -2, maxPilots};
     G.push_back(s);
     G.push_back(t);
     int sz = G.size();
@@ -265,8 +347,30 @@ int main() {
     G[sz-3].adj.insert(fromTtoTT);
 
 
+    // TODO: millorar aixo, mes eficient si guardes l'anterior graf
 
-    edmondsKarp(G);
+    // TODO: potser tambe millor encapsular-ho en una funcio
+
+    vector<Vertex> fresh = G;
+
+    int currentFlow = edmondsKarp(G);
+    int starts = countStarts(G);
+
+
+    // aixo es pq se sap que has d'obviar les arestes "saturades" al graf ampliat amb super-source i super-sink
+    // "tota aresta de super-source a vertex i de vertex a super-sink ha d'estar saturada" -> si les esborrem a G', circulacio a G
+    // es obvi que a l'haver (maxPilots) vertexs d'inici, aquest flow sobra
+
+    while (currentFlow - maxPilots != 0) {
+        G = fresh;
+        updateK(G, starts - 1);
+        currentFlow = edmondsKarp(G);
+        starts = countStarts(G);
+    }
+    G = fresh;
+    updateK(G, starts + 1);
+    currentFlow = edmondsKarp(G);
+    printPaths(G);
 
 
     /*
@@ -291,3 +395,5 @@ int main() {
     */
 
 }
+
+
