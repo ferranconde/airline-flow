@@ -103,7 +103,6 @@ int augment(const vector<Edge>& path, vector<Vertex>& G) {
                     G[e.prev].adj.erase(augEdge);
                     augEdge.flow += b;
                     G[e.prev].adj.insert(augEdge);
-
                     break;
                 }
             }
@@ -123,19 +122,19 @@ int augment(const vector<Edge>& path, vector<Vertex>& G) {
     return b;
 }
 
-vector<Edge> BFS(const vector<Vertex>& G) {
+vector<Edge> BFS(const vector<Vertex> G) {      // TODO: pass by ref
     queue<Vertex> Q;
     vector<bool> visited(G.size(), false);
     vector<Edge> parent(G.size());
 
-    Q.push(G[G.size() - 2]);    // push source vertex
+    Q.push(G[G.size() - 2]);    // push super-source vertex
     visited[G.size() - 2] = true;
 
     Vertex w;
     while (not Q.empty()) {
         w = Q.front();
         Q.pop();
-        if (w.airport == -2) {  // sink (t)
+        if (w.airport == -4) {  // super-sink (tt)
             break;
         }
 
@@ -147,7 +146,8 @@ vector<Edge> BFS(const vector<Vertex>& G) {
             }
         }
     }
-    Edge p = parent[G.size() - 1];
+
+    Edge p = parent[G.size() - 1];  // (tt)
     vector<Edge> ret;
     if (p.next != G.size() - 1) return ret;
     while (p.prev != G.size() - 2) {
@@ -183,13 +183,20 @@ int main() {
     */
     vector<vector<int>> landings(2);
     while (cin >> o >> d >> to >> td) {
-        Vertex source = {o, to, 0};
-        Vertex dest = {d, td, 0};
+
+        // In airport - airport vertices, we apply lower bound <= demand reduction
+        // source.demand += edge.lowerbound
+        // dest.demand -= edge.lowerbound
+        // correct flow/capacity in edge
+
+
+        Vertex source = {o, to, 1};
+        Vertex dest = {d, td, -1};
         G.push_back(source);
         G.push_back(dest);
         // edge from source to dest
         int sz = G.size();
-        Edge e = {0, 1, sz-2, sz-1, 0, false};
+        Edge e = {0, 0, sz-2, sz-1, 0, false};      // remember: new capacity = capacity - lower bound
         G[sz - 2].adj.insert(e);
         // store dest vertex in the "landings" array
         if (landings.size() < max(o, d) + 1) landings.resize(max(o, d) + 1);
@@ -206,6 +213,7 @@ int main() {
         }
     }
 
+    int maxPilots = G.size()/2;
 
     // Source and sink
     Vertex s {-1, -1, -2};  // negative demand means "want to send x units"
@@ -223,6 +231,39 @@ int main() {
             G[i].adj.insert(e);  // G[i] --> t (destination)
         }
     }
+
+    // add extra edge between source and sink to derive excess of flow
+    Edge extra = {0, maxPilots, sz-2, sz-1, 0, false};
+    G[sz-2].adj.insert(extra);
+
+
+    // reduce "circulation with demands" to "maximum flow"
+    // add super-source ss and super-sink tt
+    // for each vertex with negative demand (send), add Edge(ss, v) with capacity -v.demand
+    // for each vertex with positive demand (receive), add Edge(v, tt) with capacity v.demand
+
+    Vertex ss = {-3, -3, 0};
+    Vertex tt = {-4, -4, 0};
+    G.push_back(ss);
+    G.push_back(tt);
+    sz = G.size();
+
+    for (int i = 1; i < sz - 4; i += 2) {
+        Edge e = {0, -(G[i].demand), sz-2, i, 0, false};
+        G[sz-2].adj.insert(e);
+    }
+    for (int j = 0; j < sz - 4; j += 2) {
+        Edge e = {0, G[j].demand, j, sz-1, 0, false};
+        G[j].adj.insert(e);
+    }
+
+
+    Edge fromSStoS = {0, -(G[sz - 4].demand), sz-2, sz-4, 0, false};
+    G[sz-2].adj.insert(fromSStoS);
+
+    Edge fromTtoTT = {0, G[sz - 3].demand, sz-3, sz-1, 0, false};
+    G[sz-3].adj.insert(fromTtoTT);
+
 
 
     edmondsKarp(G);
