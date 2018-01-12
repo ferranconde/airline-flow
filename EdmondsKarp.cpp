@@ -258,7 +258,54 @@ void printPaths(const vector<Vertex>& G) {
         }
     }
 
-    for (int v : starts) printSimplePath(G, v, G.size() - 3);
+    for (int v : starts) printSimplePath(G, v, sz - 3);
+}
+
+bool existsPath(int v, int sink, const vector<Vertex>& G) {
+    queue<Vertex> Q;
+    vector<bool> visited(G.size(), false);
+    vector<Edge> parent(G.size());
+
+    Q.push(G[v]);                           // push start vertex
+    visited[v] = true;
+
+    Vertex w;
+    while (not Q.empty()) {
+        w = Q.front();
+        Q.pop();
+        if (w.airport == G[sink].airport) {  // sink
+            break;
+        }
+
+        for (Edge e : w.adj) {
+            if (!visited[e.next] and (e.flow > 0 or e.capacity == 0)) {
+                visited[e.next] = true;
+                Q.push(G[e.next]);
+                parent[e.next] = e;
+            }
+        }
+    }
+
+    Edge p = parent[sink];  // (tt)
+    vector<Edge> ret;
+
+    return (p.next == sink);
+}
+
+int countPaths(const vector<Vertex>& G) {
+    int sz = G.size();
+    vector<int> starts;
+    for (Edge startEdge : G[sz-4].adj) {
+        if (startEdge.flow > 0) {
+            starts.push_back(startEdge.next);
+        }
+    }
+
+    int count = 0;
+    for (int v : starts) {
+        if (existsPath(v, sz - 3, G)) count++;
+    }
+    return count;
 }
 
 
@@ -268,25 +315,14 @@ void binarySearch(int l, int r, const int maxPilots, const vector<Vertex>& origi
         updateK(newGraph, (l+r)/2 + 1);
         edmondsKarp(newGraph);
         printPaths(newGraph);
-
-        vector<Edge> at;
-
-        for (Vertex v : newGraph) {
-            for (Edge e : v.adj) {
-                if (e.next == newGraph.size() - 3 and e.flow > 0) at.push_back(e);
-            }
-        }
-
-        cout << at.size() << endl;
-
         return;
     }
     vector<Vertex> newGraph = original;
     updateK(newGraph, (l+r)/2);
-    int flow = edmondsKarp(newGraph);
+    edmondsKarp(newGraph);
     int starts = countStarts(newGraph);
-    if (flow - maxPilots <= 0) binarySearch(starts+1, r, maxPilots, original);
-    else if (flow - maxPilots > 0) binarySearch(l, starts-1, maxPilots, original);
+    if (starts != countPaths(newGraph)) binarySearch(starts+1, r, maxPilots, original);
+    else binarySearch(l, starts-1, maxPilots, original);
 
 }
 
@@ -354,6 +390,7 @@ int main() {
     G[sz-2].adj.insert(extra);
 
 
+
     // reduce "circulation with demands" to "maximum flow"
     // add super-source ss and super-sink tt
     // for each vertex with negative demand (send), add Edge(ss, v) with capacity -v.demand
@@ -384,10 +421,10 @@ int main() {
 
 
     vector<Vertex> fresh = G;
-    updateK(G, 14);
+    //updateK(G, 26);
     int currentFlow = edmondsKarp(G);
     int starts = countStarts(G);
-    printPaths(G);
+    //printPaths(G);
 
     /*vector<Vertex> inverted;
     invertGraph(G, inverted);
@@ -395,7 +432,7 @@ int main() {
 
 
 
-    //binarySearch(0, starts, maxPilots, fresh);
+    binarySearch(0, starts, maxPilots, fresh);
 
     //vector<Vertex> feasible = G;
     //int minFlow = dedmondsKarp(feasible);
