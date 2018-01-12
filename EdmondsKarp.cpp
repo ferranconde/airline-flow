@@ -68,28 +68,17 @@ void residual(const vector<Vertex>& G, vector<Vertex>& Gf) {
             - Backward edge with value = (flow)
      */
 
-    for (int vf = 0; vf < Gf.size(); vf++)
+    for (int vf = 0; vf < Gf.size(); vf++)      // TODO: NO PASSAR A for range!!!!!!
         Gf[vf].adj.clear();
+
     for (Vertex v : G) {
         for (Edge e : v.adj) {
             if (e.capacity - e.flow > 0) {  // forward edges
-                Edge ef;
-                ef.flow = 0;
-                ef.capacity = e.capacity - e.flow;
-                ef.prev = e.prev;
-                ef.next = e.next;
-                ef.lwb = 0;
-                ef.back = false;
+                Edge ef = {0, e.capacity - e.flow, e.prev, e.next, 0, false};
                 Gf[ef.prev].adj.insert(ef);
             }
             if (e.flow > 0) {               // backward edges
-                Edge nef;
-                nef.flow = 0;
-                nef.capacity = e.flow;
-                nef.prev = e.next;
-                nef.next = e.prev;
-                nef.lwb = 0;
-                nef.back = true;
+                Edge nef = {0, e.flow, e.next, e.prev, 0, true};
                 Gf[nef.prev].adj.insert(nef);
             }
         }
@@ -118,7 +107,7 @@ int augment(const vector<Edge>& path, vector<Vertex>& G) {
                 }
             }
         }
-        // e is backward edge in G
+            // e is backward edge in G
         else {
             for (Edge augEdge : G[e.next].adj) {
                 if (augEdge.next == e.prev) {
@@ -133,19 +122,19 @@ int augment(const vector<Edge>& path, vector<Vertex>& G) {
     return b;
 }
 
-vector<Edge> BFS(const vector<Vertex>& G) {      // TODO: pass by ref
+vector<Edge> BFS(const vector<Vertex>& G, const int begin, const int end) {
     queue<Vertex> Q;
     vector<bool> visited(G.size(), false);
     vector<Edge> parent(G.size());
 
-    Q.push(G[G.size() - 2]);    // push super-source vertex
-    visited[G.size() - 2] = true;
+    Q.push(G[begin]);    // push super-source vertex
+    visited[begin] = true;
 
     Vertex w;
     while (not Q.empty()) {
         w = Q.front();
         Q.pop();
-        if (w.airport == -4) {  // super-sink (tt)
+        if (w.airport == G[end].airport) {  // super-sink (tt)
             break;
         }
 
@@ -158,10 +147,10 @@ vector<Edge> BFS(const vector<Vertex>& G) {      // TODO: pass by ref
         }
     }
 
-    Edge p = parent[G.size() - 1];  // (tt)
+    Edge p = parent[end];  // (tt)
     vector<Edge> ret;
-    if (p.next != G.size() - 1) return ret;
-    while (p.prev != G.size() - 2) {
+    if (p.next != end) return ret;
+    while (p.prev != begin) {
         ret.push_back(p);
         p = parent[p.prev];
     }
@@ -170,16 +159,16 @@ vector<Edge> BFS(const vector<Vertex>& G) {      // TODO: pass by ref
     return ret;
 }
 
-int edmondsKarp(vector<Vertex>& G) {    // TODO: pass by reference, by value only to help debugging
+int edmondsKarp(vector<Vertex>& G) {
     vector<Vertex> Gf = G;
     residual(G, Gf);
     int flow = 0;
 
-    vector<Edge> augPath = BFS(Gf);
-    while (augPath.size() > 0) {
+    vector<Edge> augPath = BFS(Gf, Gf.size()-2, Gf.size()-1);
+    while (!augPath.empty()) {
         flow += augment(augPath, G);
         residual(G, Gf);
-        augPath = BFS(Gf);
+        augPath = BFS(Gf, Gf.size()-2, Gf.size()-1);
     }
 
     return flow;
@@ -218,43 +207,89 @@ void updateK(vector<Vertex>& G, int k) {
     G[sz-3].adj.insert(newTTT);
 }
 
+void printSimplePath(const vector<Vertex>& G, int v, int sink) {
+    queue<Vertex> Q;
+    vector<bool> visited(G.size(), false);
+    vector<Edge> parent(G.size());
+
+    Q.push(G[v]);                           // push start vertex
+    visited[v] = true;
+
+    Vertex w;
+    while (not Q.empty()) {
+        w = Q.front();
+        Q.pop();
+        if (w.airport == G[sink].airport) {  // sink
+            break;
+        }
+
+        for (Edge e : w.adj) {
+            if (!visited[e.next] and (e.flow > 0 or e.capacity == 0)) {
+                visited[e.next] = true;
+                Q.push(G[e.next]);
+                parent[e.next] = e;
+            }
+        }
+    }
+
+    Edge p = parent[sink];  // (tt)
+    vector<Edge> ret;
+    if (p.next != sink) return;
+    while (p.prev != v) {
+        ret.push_back(p);
+        p = parent[p.prev];
+    }
+    ret.push_back(p);
+    reverse(ret.begin(), ret.end());
+
+    for (int i = 0; i < ret.size(); i++) {
+        if (ret[i].capacity == 0) cout << (ret[i].prev)/2 + 1 << " ";
+    }
+    cout << endl;
+
+}
 
 void printPaths(const vector<Vertex>& G) {
     int sz = G.size();
+    vector<int> starts;
     for (Edge startEdge : G[sz-4].adj) {
         if (startEdge.flow > 0) {
-            // This is a start edge
-            Vertex u = G[startEdge.next];
-
-            while (u.airport != -2) {
-                for (Edge e : u.adj) {      // TODO: better with "find"?
-                    if (e.next == e.prev + 1) {
-                        // this is a flight edge
-                        if (e != startEdge) cout << ' ';
-                        cout << (e.next/2) + 1;
-
-                        // navigate to next flight, if possible
-                        bool foundLink = false;
-                        for (Edge link : G[e.next].adj) {
-                            if (link.next != sz-3 and link.flow > 0) {
-                                // this is a link between two flights
-                                u = G[link.next];
-                                foundLink = true;
-                                break;
-                            }
-                        }
-
-                        if (!foundLink) u = G[sz-3];    // flight path ends here
-                        break;
-                    }
-                }
-            }
-
-            cout << endl;
-
+            starts.push_back(startEdge.next);
         }
     }
+
+    for (int v : starts) printSimplePath(G, v, G.size() - 3);
 }
+
+
+void binarySearch(int l, int r, const int maxPilots, const vector<Vertex>& original) {
+    if (l > r) {
+        vector<Vertex> newGraph = original;
+        updateK(newGraph, (l+r)/2 + 1);
+        edmondsKarp(newGraph);
+        printPaths(newGraph);
+
+        vector<Edge> at;
+
+        for (Vertex v : newGraph) {
+            for (Edge e : v.adj) {
+                if (e.next == newGraph.size() - 3 and e.flow > 0) at.push_back(e);
+            }
+        }
+
+        cout << at.size() << endl;
+
+        return;
+    }
+    vector<Vertex> newGraph = original;
+    updateK(newGraph, (l+r)/2);
+    int flow = edmondsKarp(newGraph);
+    int starts = countStarts(newGraph);
+    if (flow - maxPilots <= 0) binarySearch(starts+1, r, maxPilots, original);
+    else if (flow - maxPilots > 0) binarySearch(l, starts-1, maxPilots, original);
+
+}
+
 
 
 int main() {
@@ -315,8 +350,8 @@ int main() {
     }
 
     // add extra edge between source and sink to derive excess of flow
-    // Edge extra = {0, maxPilots, sz-2, sz-1, 0, false};
-    // G[sz-2].adj.insert(extra);
+    Edge extra = {0, maxPilots, sz-2, sz-1, 0, false};
+    G[sz-2].adj.insert(extra);
 
 
     // reduce "circulation with demands" to "maximum flow"
@@ -347,19 +382,32 @@ int main() {
     G[sz-3].adj.insert(fromTtoTT);
 
 
-    // TODO: millorar aixo, mes eficient si guardes l'anterior graf
-
-    // TODO: potser tambe millor encapsular-ho en una funcio
 
     vector<Vertex> fresh = G;
-
+    updateK(G, 14);
     int currentFlow = edmondsKarp(G);
     int starts = countStarts(G);
+    printPaths(G);
+
+    /*vector<Vertex> inverted;
+    invertGraph(G, inverted);
+     */
+
+
+
+    //binarySearch(0, starts, maxPilots, fresh);
+
+    //vector<Vertex> feasible = G;
+    //int minFlow = dedmondsKarp(feasible);
+
+
 
 
     // aixo es pq se sap que has d'obviar les arestes "saturades" al graf ampliat amb super-source i super-sink
     // "tota aresta de super-source a vertex i de vertex a super-sink ha d'estar saturada" -> si les esborrem a G', circulacio a G
     // es obvi que a l'haver (maxPilots) vertexs d'inici, aquest flow sobra
+
+    /*
 
     while (currentFlow - maxPilots != 0) {
         G = fresh;
@@ -372,6 +420,7 @@ int main() {
     currentFlow = edmondsKarp(G);
     printPaths(G);
 
+     */
 
     /*
     cout << endl <<  "Test residual:" << endl << endl;
@@ -395,5 +444,3 @@ int main() {
     */
 
 }
-
-
