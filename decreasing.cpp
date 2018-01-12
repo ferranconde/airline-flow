@@ -162,14 +162,7 @@ int edmondsKarp(vector<Vertex>& G, bool inverted) {
     return flow;
 }
 
-int countStarts(const vector<Vertex>& G) {
-    int count = 0;
-    int sz = G.size();
-    for (Edge e : G[sz - 2].adj) {
-        if (e.flow > 0 and e.next != sz-1) count++;
-    }
-    return count;
-}
+
 
 void printSimplePath(const vector<Vertex>& G, int v, int sink) {
     queue<Vertex> Q;
@@ -206,8 +199,13 @@ void printSimplePath(const vector<Vertex>& G, int v, int sink) {
     ret.push_back(p);
     reverse(ret.begin(), ret.end());
 
+    bool first = true;
     for (int i = 0; i < ret.size(); i++) {
-        if (ret[i].capacity == 0) cout << (ret[i].prev)/2 + 1 << " ";
+        if (ret[i].capacity == 0) {
+            if (first) first = false;
+            else cout << " ";
+            cout << (ret[i].prev)/2 + 1;
+        }
     }
     cout << endl;
 
@@ -216,61 +214,38 @@ void printSimplePath(const vector<Vertex>& G, int v, int sink) {
 void printPaths(const vector<Vertex>& G) {
     int sz = G.size();
     vector<int> starts;
-    for (Edge startEdge : G[sz - 2].adj) {
+    for (Edge startEdge : G[sz - 4].adj) {
         if (startEdge.flow > 0) {
             starts.push_back(startEdge.next);
         }
     }
 
-    for (int v : starts) printSimplePath(G, v, sz - 1);
+    for (int v : starts) printSimplePath(G, v, sz - 3);
 }
 
 
-bool existsPath(int v, int sink, const vector<Vertex>& G) {
-    queue<Vertex> Q;
-    vector<bool> visited(G.size(), false);
-    vector<Edge> parent(G.size());
 
-    Q.push(G[v]);                           // push start vertex
-    visited[v] = true;
+void updateK(vector<Vertex>& G, int k) {
+    // update demands on: source, sink
+    // update capacities on: edge ss - s, edge t - tt
 
-    Vertex w;
-    while (not Q.empty()) {
-        w = Q.front();
-        Q.pop();
-        if (w.airport == G[sink].airport) {  // sink
-            break;
-        }
-
-        for (Edge e : w.adj) {
-            if (!visited[e.next] and (e.flow > 0 or e.capacity == 0)) {
-                visited[e.next] = true;
-                Q.push(G[e.next]);
-                parent[e.next] = e;
-            }
-        }
-    }
-
-    Edge p = parent[sink];  // (tt)
-    vector<Edge> ret;
-
-    return (p.next == sink);
-}
-
-int countPaths(const vector<Vertex>& G) {
     int sz = G.size();
-    vector<int> starts;
-    for (Edge startEdge : G[sz-2].adj) {
-        if (startEdge.flow > 0) {
-            starts.push_back(startEdge.next);
-        }
-    }
+    Edge fromSStoS = {0, -(G[sz - 4].demand), sz-2, sz-4, 0, false};
+    Edge fromTtoTT = {0, G[sz - 3].demand, sz-3, sz-1, 0, false};
 
-    int count = 0;
-    for (int v : starts) {
-        if (existsPath(v, sz - 1, G)) count++;
-    }
-    return count;
+    Edge newSSS = fromSStoS;
+    newSSS.capacity = k;
+    Edge newTTT = fromTtoTT;
+    newTTT.capacity = k;
+
+    G[sz-4].demand = -k;
+    G[sz-3].demand = k;
+
+    G[sz-2].adj.erase(fromSStoS);
+    G[sz-2].adj.insert(newSSS);
+
+    G[sz-3].adj.erase(fromTtoTT);
+    G[sz-3].adj.insert(newTTT);
 }
 
 
@@ -292,13 +267,13 @@ int main() {
         // correct flow/capacity in edge
 
 
-        Vertex source = {o, to, 0};
-        Vertex dest = {d, td, 0};
+        Vertex source = {o, to, 1};
+        Vertex dest = {d, td, -1};
         G.push_back(source);
         G.push_back(dest);
         // edge from source to dest
         int sz = G.size();
-        Edge e = {1, 1, sz - 2, sz - 1, 1, false};      // remember: new capacity = capacity - lower bound
+        Edge e = {0, 0, sz - 2, sz - 1, 1, false};      // remember: new capacity = capacity - lower bound
         G[sz - 2].adj.insert(e);
         // store dest vertex in the "landings" array
         if (landings.size() < max(o, d) + 1) landings.resize(max(o, d) + 1);
@@ -333,13 +308,65 @@ int main() {
         }
     }
 
-    // add extra edge between source and sink to derive excess of flow
-    // Edge extra = {0, maxPilots, sz - 2, sz - 1, 0, false};
-    // G[sz - 2].adj.insert(extra);
+
+    // Check maximum counter-flow: maxPilots - maxCounterFlow = minimum pilots required
+
+    vector<Vertex> fresh = G;
+
+    int maxCounterFlow = edmondsKarp(G, true);
+
+    // Restore graph to the original form
+
+    // Clean flow in edges s - u
+    set<Edge> sEdges = fresh[G.size()-2].adj;
+    fresh[G.size()-2].adj.clear();
+    for (Edge e : sEdges) {
+        e.flow = 0;
+        fresh[G.size()-2].adj.insert(e);
+    }
+
+    // Clean flow in edges v - t
+    for (int vt = 1; vt < fresh.size() - 2; vt += 2) {
+        set<Edge> vertexEdges = fresh[vt].adj;
+        for (Edge e : vertexEdges) {
+            if (e.next == G.size()-1) {
+                fresh[vt].adj.erase(e);
+                e.flow = 0;
+                fresh[vt].adj.insert(e);
+                break;
+            }
+        }
+    }
+
+    // reduce "circulation with demands" to "maximum flow"
+    // add super-source ss and super-sink tt
+    // for each vertex with negative demand (send), add Edge(ss, v) with capacity -v.demand
+    // for each vertex with positive demand (receive), add Edge(v, tt) with capacity v.demand
+
+    Vertex ss = {-3, -3, 0};
+    Vertex tt = {-4, -4, 0};
+    fresh.push_back(ss);
+    fresh.push_back(tt);
+    sz = fresh.size();
+
+    for (int i = 1; i < sz - 4; i += 2) {
+        Edge e = {0, -(fresh[i].demand), sz-2, i, 0, false};
+        fresh[sz-2].adj.insert(e);
+    }
+    for (int j = 0; j < sz - 4; j += 2) {
+        Edge e = {0, fresh[j].demand, j, sz-1, 0, false};
+        fresh[j].adj.insert(e);
+    }
 
 
-    int currentFlow = edmondsKarp(G, true);
-    //int starts = countStarts(G);
+    Edge fromSStoS = {0, -(fresh[sz - 4].demand), sz-2, sz-4, 0, false};
+    fresh[sz-2].adj.insert(fromSStoS);
 
+    Edge fromTtoTT = {0, fresh[sz - 3].demand, sz-3, sz-1, 0, false};
+    fresh[sz-3].adj.insert(fromTtoTT);
+
+    updateK(fresh, maxPilots - maxCounterFlow);
+    int optFlow = edmondsKarp(fresh, false) - maxPilots;
+    printPaths(fresh);
 
 }
