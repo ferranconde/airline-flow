@@ -28,19 +28,41 @@ Flight | Origin | Destination | Departure time | Arrival time
 6 | CDG | BCN | 750 | 850
 
 With version 1, a feasible assignment would be:
-```Pilot 1: T1, T2
+```
+Pilot 1: T1, T2
 Pilot 2: T3, T4
-Pilot 3: T5, T6```
+Pilot 3: T5, T6
+```
 
 But the optimum assignment would use only two pilots:
-```Pilot 1: T1, T3, T5, T2
-Pilot 2: T4, T6```
+```
+Pilot 1: T1, T3, T5, T2
+Pilot 2: T4, T6
+```
 
 With version 2, a feasible assignment would be:
-```Pilot 1: T1, T5, T2
-Pilot 2: T3, T4, T6```
+```
+Pilot 1: T1, T5, T2
+Pilot 2: T3, T4, T6
+```
 
 In the last example, the pilot 1 would go from CDG to LGW as a passenger in T3.
 
 
-We will formulate the problem as a minimum-flow problem, showing that it is possible to find an optimum assignment with only two executions of a max-flow algorithm.
+The minimum flow problem
+-------------------------
+
+Most of the work is based on:
+
+> Algorithm Design
+> by Jon Kleinberg, Eva Tardos
+> Chapter 7 (Network flow)
+
+This project uses the reductions stated on this book.
+
+When you want to find the maximum flow on a network, you start with an empty network and you use a max-flow algorithm from *s* to *t* to augment the flow.
+To find the minimum flow that is a feasible flow, i.e. it satisfies all the lower bounds, capacity, and flow conservation constraints,
+you twist the approach: you start with a feasible flow, **f** and you reduce it by applying a max-flow algorithm from *t* to *s*.
+Think of it as if supplying *air* from *t* to *s*, instead of pumping *fluid* or *resource* from *s* to *t*.
+The resulting *air flow* is maximum, with value **f'**.
+The optimum flow will be `Fopt = f - f'`. Applying a max-flow algorithm again on an empty network knowing the optimum flow value will lead you to a feasible circulation that is minimum.
