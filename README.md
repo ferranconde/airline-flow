@@ -54,9 +54,7 @@ The minimum flow problem
 
 Most of the work is based on:
 
-> Algorithm Design
-> by Jon Kleinberg, Eva Tardos
-> Chapter 7 (Network flow)
+> Algorithm Design by Jon Kleinberg, Eva Tardos: Chapter 7 (Network flow)
 
 This project uses the reductions stated on this book.
 
