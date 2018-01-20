@@ -60,7 +60,7 @@ This project uses the reductions stated on this book.
 
 When you want to find the maximum flow on a network, you start with an empty network and you use a max-flow algorithm from *s* to *t* to augment the flow.
 To find the minimum flow that is a feasible flow, i.e. it satisfies all the lower bounds, capacity, and flow conservation constraints,
-you twist the approach: you start with a feasible flow, **f** and you reduce it by applying a max-flow algorithm from *t* to *s*.
+you twist the approach: you start with a feasible flow **f** and you reduce it by applying a max-flow algorithm from *t* to *s*.
 Think of it as if supplying *air* from *t* to *s*, instead of pumping *fluid* or *resource* from *s* to *t*.
 The resulting *air flow* is maximum, with value **f'**.
 The optimum flow will be `Fopt = f - f'`. Applying a max-flow algorithm again on an empty network knowing the optimum flow value will lead you to a feasible circulation that is minimum.
