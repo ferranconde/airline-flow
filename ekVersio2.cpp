@@ -44,16 +44,16 @@ void residual(const vector<Vertex>& G, vector<Vertex>& Gf) {
         - Those edges with positive free capacity:
             - Forward edge with value = (free capacity)
         - Those edges with positive flow:
-            - Backward edge with value = (flow)
+            - Backward edge with value = (flow - lower bound)
      */
 
-    for (int vf = 0; vf < Gf.size(); vf++)      // TODO: NO PASSAR A for range!!!!!!
+    for (int vf = 0; vf < Gf.size(); vf++)
         Gf[vf].adj.clear();
 
 
     for (Vertex v : G) {
         for (Edge e : v.adj) {
-            if (e.capacity - e.flow > 0) {  // forward edges
+            if (e.capacity - e.flow > 0) {          // forward edges
                 Edge ef = {0, e.capacity - e.flow, e.prev, e.next, 0, false};
                 Gf[ef.prev].adj.insert(ef);
             }
@@ -76,6 +76,7 @@ int bottleneck(const vector<Edge>& path) {
 int augment(const vector<Edge>& path, vector<Vertex>& G) {
     int b = bottleneck(path);
     for (Edge e : path) {
+
         // e is forward edge in G
         if (!e.back) {
             for (Edge augEdge : G[e.prev].adj) {
@@ -87,7 +88,8 @@ int augment(const vector<Edge>& path, vector<Vertex>& G) {
                 }
             }
         }
-            // e is backward edge in G
+
+        // e is backward edge in G
         else {
             for (Edge augEdge : G[e.next].adj) {
                 if (augEdge.next == e.prev) {
@@ -107,14 +109,14 @@ vector<Edge> BFS(const vector<Vertex>& G, const int begin, const int end) {
     vector<bool> visited(G.size(), false);
     vector<Edge> parent(G.size());
 
-    Q.push(G[begin]);    // push super-source vertex
+    Q.push(G[begin]);
     visited[begin] = true;
 
     Vertex w;
     while (not Q.empty()) {
         w = Q.front();
         Q.pop();
-        if (w.airport == G[end].airport) {  // super-sink (tt)
+        if (w.airport == G[end].airport) {
             break;
         }
 
@@ -127,7 +129,7 @@ vector<Edge> BFS(const vector<Vertex>& G, const int begin, const int end) {
         }
     }
 
-    Edge p = parent[end];  // (tt)
+    Edge p = parent[end];
     vector<Edge> ret;
     if (p.next != end) return ret;
     while (p.prev != begin) {
@@ -148,8 +150,8 @@ int edmondsKarp(vector<Vertex>& G, bool inverted) {
     int end = Gf.size()-1;      // t
 
     if (inverted) {
-        begin = Gf.size()-1;
-        end = Gf.size()-2;
+        begin = Gf.size()-1;    // t
+        end = Gf.size()-2;      // s
     }
 
     vector<Edge> augPath = BFS(Gf, begin, end);
@@ -169,14 +171,14 @@ void printSimplePath(vector<Vertex>& G, int v, int sink) {
     vector<bool> visited(G.size(), false);
     vector<Edge> parent(G.size());
 
-    Q.push(G[v]);                           // push start vertex
+    Q.push(G[v]);
     visited[v] = true;
 
     Vertex w;
     while (not Q.empty()) {
         w = Q.front();
         Q.pop();
-        if (w.airport == G[sink].airport) {  // sink
+        if (w.airport == G[sink].airport) {
             break;
         }
 
@@ -189,7 +191,7 @@ void printSimplePath(vector<Vertex>& G, int v, int sink) {
         }
     }
 
-    Edge p = parent[sink];  // (tt)
+    Edge p = parent[sink];
     vector<Edge> ret;
     if (p.next != sink) return;
     while (p.prev != v) {
@@ -280,13 +282,13 @@ int main() {
         // correct flow/capacity in edge
 
 
-        Vertex source = {o, to, 1};     // s'ha de definir despres
-        Vertex dest = {d, td, -1};      // idem
+        Vertex source = {o, to, 1};
+        Vertex dest = {d, td, -1};
         G.push_back(source);
         G.push_back(dest);
         // edge from source to dest
         int sz = G.size();
-        Edge e = {0, 0, sz - 2, sz - 1, 1, false};      // s'ha de canviar despres
+        Edge e = {0, 0, sz - 2, sz - 1, 1, false};
         G[sz - 2].adj.insert(e);
         // store dest vertex in the "landings" array
         if (landings.size() < max(o, d) + 1) landings.resize(max(o, d) + 1);
@@ -326,10 +328,10 @@ int main() {
     for (int i = 0; i < sz - 2; i++) {
         if (i % 2 == 0) {
             Edge e = {1, maxPilots, sz - 2, i, 0, false};
-            G[sz - 2].adj.insert(e);  // s --> G[i] (origin)
+            G[sz - 2].adj.insert(e);        // s --> G[i] (origin)
         } else {
             Edge e = {1, maxPilots, i, sz - 1, 0, false};
-            G[i].adj.insert(e);  // G[i] --> t (destination)
+            G[i].adj.insert(e);             // G[i] --> t (destination)
         }
     }
 
@@ -392,6 +394,8 @@ int main() {
 
     updateK(fresh, maxPilots - maxCounterFlow);
     int optFlow = edmondsKarp(fresh, false) - maxPilots;
+
+    cout << optFlow << endl;
 
     for (int v = 0; v < fresh.size() -4; v += 2) {
         set<Edge> vEdges = fresh[v].adj;
